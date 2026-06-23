@@ -60,6 +60,9 @@ risk, obvious low risk, ambiguous medium risk, adversarial cases, and edge cases
 Ground truth labels were set by the author prior to running the eval, based on 
 two years of AML/FCPA analysis experience at PwC.
 
+> **Note:** Ground truth labels were set by the author before running the eval. 
+> The medium/high boundary is subjective — see Key Finding below for a full discussion of what the Haiku vs Sonnet comparison actually shows.
+
 ### Results
 
 | Metric | Claude Haiku | Claude Sonnet |
@@ -72,16 +75,30 @@ two years of AML/FCPA analysis experience at PwC.
 | Avg Input Tokens | 1,376 | 1,416 |
 | Avg Tool Calls/Case | 2.7 | 2.9 |
 
+
 ### Key Finding
 
-Haiku achieved perfect scores on this dataset. Sonnet's two errors were both 
-false positives on genuinely ambiguous medium-risk cases — it escalated C003 
-(BVI shell company with undisclosed beneficial ownership) and C014 (freight 
-forwarder routing funds through Russia and Iran) to high risk. 
+At first glance, Haiku appears to outperform Sonnet — 100% accuracy versus 90%. 
+This framing is misleading and worth examining carefully.
 
-In AML, false positives are preferable to false negatives. Sonnet's more 
-conservative posture on ambiguous cases may be appropriate for production 
-deployment, at the cost of 2.3x higher latency and increased analyst review burden.
+Sonnet's two errors are both false positives on the two most ambiguous cases in 
+the dataset: C003 (BVI shell company, undisclosed beneficial ownership, payments 
+from firms with procurement irregularities) and C014 (freight forwarder routing 
+funds through Russia and Iran). Both cases sit genuinely at the medium/high 
+boundary. A more conservative analyst — or a different labelling decision — 
+would have marked both as high risk, which would flip Sonnet's "errors" into 
+correct predictions and give Sonnet 100% accuracy too.
+
+The real finding is not that Haiku is more accurate. It is that Sonnet applies 
+more conservative judgment on ambiguous cases, which in AML is arguably the 
+correct behaviour — false negatives (missed risks) are more costly than false 
+positives (unnecessary reviews). The dataset also has a known limitation: 
+ground truth labels were set by the same person who designed the cases, 
+introducing selection bias toward the boundary decisions one analyst would make.
+
+A production-grade eval would require a larger dataset with independently 
+verified ground truth labels. This eval is best understood as a proof of concept 
+demonstrating the framework, not a definitive performance benchmark.
 
 **Recommended architecture for a startup deployment:** Haiku for high-volume 
 first-pass screening, Sonnet reserved for cases Haiku flags as borderline. 
@@ -164,7 +181,6 @@ That boundary is exactly where this eval showed the most interesting failures.
 
 ---
 
-## Background
 
 ## Background
 
