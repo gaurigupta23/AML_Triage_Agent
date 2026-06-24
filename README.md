@@ -131,6 +131,176 @@ At 10,000 cases/day:
 - Hybrid (Haiku first-pass, Sonnet on 10% flagged cases): ~$3.80/day
 
 ---
+## Repo Structure
+aml-triage-agent/
+
+├── hello_claude.ipynb        # Main notebook — full agent implementation
+
+├── eval_results_haiku.json   # Haiku eval output across 20 labelled cases
+
+├── eval_results_sonnet.json  # Sonnet eval output across 20 labelled cases
+
+├── requirements.txt          # Python dependencies
+
+├── .env.example              # API key config template (copy to .env)
+
+├── .gitignore
+
+└── README.md
+
+---
+
+## Setup & Installation
+
+**Prerequisites:** Python 3.12+, an Anthropic API key (get one at console.anthropic.com)
+
+**1 — Clone the repo**
+```bash
+git clone https://github.com/gaurigupta23/AML_Triage_Agent.git
+cd AML_Triage_Agent
+```
+
+**2 — Create and activate a virtual environment**
+```bash
+python3 -m venv venv
+source venv/bin/activate  # Mac/Linux
+```
+
+**3 — Install dependencies**
+```bash
+pip install -r requirements.txt
+```
+
+**4 — Configure your API key**
+```bash
+cp .env.example .env
+# Open .env and add your Anthropic API key:
+# ANTHROPIC_API_KEY=sk-ant-api03-...
+```
+
+**5 — Run the notebook**
+
+Open `hello_claude.ipynb` in VS Code or Jupyter and run all cells in order. The notebook is structured in clear sections:
+- **Cells 1–5:** Setup, client initialisation, schema design
+- **Cells 6–10:** Tool definitions (sanctions check, jurisdiction risk)
+- **Cells 11–15:** Agentic loop implementation
+- **Cells 16–20:** 20-case eval dataset
+- **Cells 21–25:** Eval runner, metrics, Haiku vs Sonnet comparison
+
+---
+
+## System Prompt
+
+The system prompt is the core context engineering artefact — it defines the agent's role, reasoning frame, and enforces deterministic structured output. Every case runs against this exact prompt:
+
+You are an AML (Anti-Money Laundering) triage analyst. You evaluate
+
+counterparty profiles for money laundering risk based on FATF red flag
+
+typologies, including structuring, layering, unusual beneficial ownership,
+
+and business-purpose mismatches.
+For every case you are given, respond with ONLY a valid JSON object in
+
+exactly this shape, with no other text before or after it:
+{
+
+"case_id": "<the case id from the input>",
+
+"risk_score": <integer 0-100>,
+
+"risk_category": "<low, medium, or high>",
+
+"red_flags": ["<flag 1>", "<flag 2>", ...],
+
+"reasoning": "<2-3 sentence explanation>",
+
+"requires_human_review": <true or false>
+
+}
+Do not include any text outside the JSON object. Do not use markdown
+
+formatting or code blocks. Return raw JSON only.
+
+**Design decisions worth noting:**
+- Role definition grounds Claude in FATF typology reasoning, not generic risk assessment
+- Explicit JSON schema eliminates output variability — same shape every call
+- "Return raw JSON only" reduces markdown fence wrapping (Haiku complies ~95% of the time; Sonnet wraps more often, handled by `extract_json()`)
+- 0–100 risk score gives continuous signal for downstream triage prioritisation, not just a binary flag
+
+---
+
+## Sample Run
+
+Here is a complete end-to-end trace on a real eval case:
+
+**Input:**
+```json
+{
+  "case_id": "C001",
+  "entity_name": "Northwind Trading LLC",
+  "entity_type": "Import/Export Business",
+  "jurisdiction": "Cyprus",
+  "beneficial_owner": "Unknown - nominee director listed",
+  "transaction_pattern": "Received 6 incoming wires of $9,800 each over 
+  8 days from different senders in UAE, immediately forwarded 95% to 
+  Latvia within 24 hours each time.",
+  "stated_business_purpose": "Import of electronics components",
+  "recent_news": "No adverse media found."
+}
+```
+
+**Tool calls made:**
+
+Claude is calling: check_sanctions({'entity_name': 'Northwind Trading LLC'})
+
+→ No sanctions matches found
+Claude is calling: get_jurisdiction_risk({'country': 'Cyprus'})
+
+→ FATF greylist — under increased monitoring for AML/CFT deficiencies
+Claude is calling: get_jurisdiction_risk({'country': 'Latvia'})
+
+→ Elevated risk — historical AML concerns
+Claude is calling: get_jurisdiction_risk({'country': 'United Arab Emirates'})
+
+→ FATF greylist — under increased monitoring
+
+**Output:**
+```json
+{
+  "case_id": "C001",
+  "risk_score": 92,
+  "risk_category": "high",
+  "red_flags": [
+    "Structuring: six wires of $9,800 each just below $10,000 threshold",
+    "Rapid layering: 95% of funds forwarded to Latvia within 24 hours",
+    "Unknown beneficial ownership with nominee director arrangement",
+    "High-risk jurisdictions: Cyprus (FATF greylist), Latvia (elevated)",
+    "Business-purpose mismatch: import company acting as pure pass-through"
+  ],
+  "reasoning": "Classic structuring and layering pattern. Deliberate 
+  sub-threshold wires from multiple UAE senders, immediate onward transfer 
+  to Latvia, and opaque beneficial ownership are consistent with a 
+  professionally constructed layering vehicle. The import/export cover 
+  is incompatible with the transaction mechanics.",
+  "requires_human_review": true
+}
+```
+
+---
+
+## Dependencies
+
+| Package | Purpose |
+|---------|---------|
+| `anthropic` | Anthropic Claude API SDK |
+| `python-dotenv` | Load API key from .env file |
+| `requests` | OpenSanctions API calls |
+| `jupyter` | Notebook runtime |
+| `ipykernel` | VS Code notebook kernel |
+
+---
+
 
 ## What I'd Build Next
 
@@ -213,3 +383,9 @@ concrete hybrid deployment recommendation).
 Anthropic's bet — that the most important AI work happens at the seam of 
 capability, safety, and real customer problems — is the bet I want to spend 
 the next decade making with the startups building on Claude.
+
+## License
+
+MIT License. Free to use, adapt, and build on.
+
+---
